@@ -1,9 +1,8 @@
 // Import packages, initialize an express app, and define the port you will use
 const express = require('express');
+const { body, validationResult } = require('express-validator');
 const app = express();
 const port = 3000;
-
-app.use(express.json());
 
 app.listen(port, () => {
     console.log(`Restaurant API server running at http://localhost:${port}`);
@@ -68,6 +67,72 @@ const menuItems = [
   }
 ];
 
+
+// Validation middleware
+const menuItemValidation = [
+  body('name')
+    .isString()
+    .notEmpty()
+    .withMessage('Name must be a string'),
+
+  body('description')
+    .isString()
+    .notEmpty()
+    .withMessage('Description must be a string'),
+
+  body('price')
+    .isFloat({ gt: 0 })
+    .withMessage('Price must be a positive number'),
+
+  body('category')
+    .isIn(['appetizer', 'entree', 'dessert', 'beverage'])
+    .withMessage('Category must be one of: appetizer, entree, dessert, beverage'),
+
+  body('ingredients')
+    .isArray({ min: 1 })
+    .withMessage('Ingredients must be an array with at least one item'),
+
+  body('available')
+    .optional()
+    .isBoolean()
+    .withMessage('Available must be true or false')
+];
+
+// Validation error handling middleware
+const handleValidationErrors = (req, res, next) => {
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const errorMessages = errors.array().map(error => error.msg);
+    return res.status(400).json({
+      error: 'Validation failed',
+      messages: errorMessages
+    });
+  }
+
+  if(req.body.completed === undefined) {
+    req.body.completed = false;
+  }
+
+  next();
+};
+
+
+//Request logging middleware
+const requestLogger = (req, res, next) => {
+  const timeStamp = new Date().toISOString();
+  console.log(`[${timeStamp}] ${req.method} ${req.originalUrl}`)
+
+  if(req.method === 'POST' || req.method === 'PUT') {
+    console.log("Request Body", JSON.stringify(req.body, null, 2))
+  }
+
+  next();
+};
+
+app.use(express.json());
+app.use(requestLogger);
+
 // Define routes and implement middleware here
 // GET all menu items/specific menu items
 app.get('/', (req, res) => {
@@ -99,7 +164,7 @@ app.get('/menu/:id', (req, res) => {
 });
 
 // POST menu items
-app.post('/menu', (req, res) => {
+app.post('/menu', menuItemValidation, handleValidationErrors, (req, res) => {
     const { name, description, price, category, ingredients, available } = req.body;
   
     const newItem = {
@@ -119,7 +184,7 @@ app.post('/menu', (req, res) => {
 
 
 // PUT menu items
-app.put('/menu/:id', (req, res) => {
+app.put('/menu/:id', menuItemValidation, handleValidationErrors, (req, res) => {
     const itemId = parseInt(req.params.id);
     const { name, description, price, category, ingredients, available } = req.body;
   
@@ -159,6 +224,7 @@ app.delete('/menu/:id', (req, res) => {
 });
 
 
+
 if (require.main === module) {
     app.listen(port, () => {
          console.log(`API server running at http://localhost:${port}`);
@@ -166,3 +232,4 @@ if (require.main === module) {
 }
 
 module.exports = app;
+
